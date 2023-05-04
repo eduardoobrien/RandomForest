@@ -1,0 +1,77 @@
+var ps = ee.ImageCollection('projects/planet-nicfi/assets/basemaps/americas');
+
+var geometry = ee.FeatureCollection("users/eobrien/cajamarca");
+var image = ps.filter(ee.Filter.date('2022-06-01', '2022-06-30')).first();
+var image_cut = image.clip(geometry);
+
+Map.centerObject(geometry, 10)
+
+// Calcular NDVI y NDWI
+var ndvi = image_cut.normalizedDifference(['N', 'R']);
+var ps = ee.ImageCollection('projects/planet-nicfi/assets/basemaps/americas');
+
+var geometry = ee.FeatureCollection("users/eobrien/cajamarca");
+var image = ps.filter(ee.Filter.date('2022-06-01', '2022-06-30')).first();
+var image_cut = image.clip(geometry);
+
+Map.centerObject(geometry, 10);
+
+// Calcular NDVI y NDWI
+var ndvi = image_cut.normalizedDifference(['N', 'R']);
+var ndwi = image_cut.normalizedDifference(['G', 'N']);
+
+// Agregar banda ndvi y ndwi a la imagen
+image_cut = image_cut.addBands(ndvi).addBands(ndwi).rename(['B', 'G', 'R', 'N', 'nd', 'nd_1']);
+
+// Visualizar imágenes
+var vis = {"bands":["R","G","B"],"min":64,"max":5454,"gamma":1.8};
+Map.addLayer(image_cut, vis, 'Mosaic_CV_Planet_Jun_2022',true);
+
+var vis1 = {"bands":["N","R","G"],"min":64,"max":5454,"gamma":1.8};
+Map.addLayer(image_cut , vis1, 'Mosaic_NIR_Planet_Jun_2022',false);
+
+// Visualizar imágenes NDVI y NDWI
+var vis_ndvi = {min: -1, max: 1, palette: ['blue', 'white', 'green']};
+Map.addLayer(ndvi, vis_ndvi, 'NDVI');
+
+var vis_ndwi = {min: -1, max: 1, palette: ['navy', 'white', 'lime']};
+Map.addLayer(ndwi, vis_ndwi, 'NDWI');
+
+// Seeds
+var seeds = ee.Algorithms.Image.Segmentation.seedGrid(15, 'hex');
+
+// SNIC segmentation
+var segment = ee.Algorithms.Image.Segmentation.SNIC({
+  image: image_cut, 
+  compactness: 50, 
+  seeds: seeds
+});
+
+Map.addLayer(segment.select('clusters').randomVisualizer(), {}, 'Clusters', false);
+
+Map.addLayer(segment, {bands: ['R_mean', 'G_mean', 'B_mean',], min: 170.02, max: 2086.81}, 'Planet Segment',false);
+
+// Image for classification
+var imageObject = segment.select(['R_mean', 'G_mean', 'B_mean', 'N_mean', 'nd', 'nd_1']);
+var bandsName = imageObject.bandNames();
+
+// Sample
+var sample = Plantacion.merge(Agricola).merge(Sombras).merge(Agua).merge(Urbano).merge(Otra_veg).merge(Mineria);
+
+// Trained
+var trained = imageObject.sampleRegions({
+  collection: sample,
+  scale: 5,
+  properties: ['class'],
+  tileScale: 2
+});
+
+// Clasificación con Random Forest
+var bandas = ['R_mean', 'G_mean', 'B_mean', 'N_mean', 'nd', 'nd_1'];
+var clasificacion = ee.Classifier.smileRandomForest(100).train(trained, 'class', bandas);
+var image1 = segment.select(bandas).classify(clasificacion);
+Map.addLayer(image1, {min: 1, max: 7, palette: ['#79ff93', '#c2c116', '#d489ff', '#0000ff', '#6e7069','#009999','#ff00ff']}, 'Clasificación Random Forest', true);
+
+print(image_cut.bandNames());
+
+ERROR: Clasificación Random Forest: Layer error: Image.select: Pattern 'nd' did not match any bands.
