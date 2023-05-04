@@ -73,5 +73,3 @@ var image1 = segment.select(bandas).classify(clasificacion);
 Map.addLayer(image1, {min: 1, max: 7, palette: ['#79ff93', '#c2c116', '#d489ff', '#0000ff', '#6e7069','#009999','#ff00ff']}, 'Clasificación Random Forest', true);
 
 print(image_cut.bandNames());
-
-ERROR: Clasificación Random Forest: Layer error: Image.select: Pattern 'nd' did not match any bands.
